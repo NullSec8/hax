@@ -40,6 +40,8 @@ No plugins, no LSP, no file tree watchers, no telemetry, no JavaScript runtime. 
 | Dependencies | **82 total** (2 direct) | crossterm, ratatui — no proc macros, no build scripts |
 | Source | **1,736 lines** of Rust | 5 files — app.rs (421), main.rs (449), ui.rs (436), config.rs (301), theme.rs (129) |
 | Warnings | **0** | Clean at all build profiles |
+| Large file (100K lines) | **~25 ms** to interactive, **~11 MB RSS** | O(n) read+split per line |
+| Large file (500K lines) | **~68 ms** to interactive, **~44 MB RSS** | Limited by `Vec<String>` per-line overhead; practical ceiling ~500K lines |
 
 ## Performance optimizations
 
