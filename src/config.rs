@@ -103,28 +103,54 @@ pub fn exec_normal(app: &mut crate::app::App, action: &str) {
         "yank" => app.yank_line(),
         "cut" => app.cut_line(),
         "paste" => app.paste_clipboard(),
-        "cursor_left" => { if app.cursor_x > 0 { app.cursor_x -= 1; } }
+        "cursor_left" => {
+            if app.cursor_x > 0 {
+                app.cursor_x -= 1;
+                let line = &app.buffer[app.cursor_y];
+                app.cursor_byte = line[..app.cursor_byte].chars().next_back().map(|c| app.cursor_byte - c.len_utf8()).unwrap_or(0);
+            }
+        }
         "cursor_right" => {
             if app.cursor_y < app.buffer.len() {
                 let cc = app.buffer[app.cursor_y].chars().count();
-                if app.cursor_x < cc { app.cursor_x += 1; }
+                if app.cursor_x < cc {
+                    let line = &app.buffer[app.cursor_y];
+                    if let Some(c) = line[app.cursor_byte..].chars().next() {
+                        app.cursor_x += 1;
+                        app.cursor_byte += c.len_utf8();
+                    }
+                }
             }
         }
         "cursor_up" => {
-            if app.cursor_y > 0 { app.cursor_y -= 1; }
+            if app.cursor_y > 0 {
+                app.cursor_y -= 1;
+                app.recalc_cursor_byte();
+            }
         }
         "cursor_down" => {
-            if app.cursor_y + 1 < app.buffer.len() { app.cursor_y += 1; }
+            if app.cursor_y + 1 < app.buffer.len() {
+                app.cursor_y += 1;
+                app.recalc_cursor_byte();
+            }
         }
-        "cursor_home" => { app.cursor_x = 0; }
+        "cursor_home" => {
+            app.cursor_x = 0;
+            app.cursor_byte = 0;
+        }
         "cursor_end" => {
             if app.cursor_y < app.buffer.len() {
                 app.cursor_x = app.buffer[app.cursor_y].chars().count();
+                app.cursor_byte = app.buffer[app.cursor_y].len();
             }
         }
-        "page_up" => { app.cursor_y = app.cursor_y.saturating_sub(10); }
+        "page_up" => {
+            app.cursor_y = app.cursor_y.saturating_sub(10);
+            app.recalc_cursor_byte();
+        }
         "page_down" => {
             app.cursor_y = (app.cursor_y + 10).min(app.buffer.len().saturating_sub(1));
+            app.recalc_cursor_byte();
         }
         "new_line" => app.new_line(),
         "insert_tab" => app.insert_tab(),

@@ -28,9 +28,15 @@ fn main() -> io::Result<()> {
         app.open_file(std::path::PathBuf::from(&path));
     }
 
+    let mut needs_draw = true;
     while !app.quit {
-        terminal.draw(|f| ui::draw(f, &mut app))?;
-        handle_events(&mut app)?;
+        if needs_draw {
+            terminal.draw(|f| ui::draw(f, &mut app))?;
+            needs_draw = false;
+        }
+        if handle_events(&mut app)? {
+            needs_draw = true;
+        }
     }
 
     disable_raw_mode()?;
@@ -40,12 +46,14 @@ fn main() -> io::Result<()> {
     Ok(())
 }
 
-fn handle_events(app: &mut App) -> io::Result<()> {
+fn handle_events(app: &mut App) -> io::Result<bool> {
     // process all queued events each frame for instant response
+    let mut any = false;
     loop {
         if !event::poll(std::time::Duration::from_millis(5))? {
             break;
         }
+        any = true;
         let evt = event::read()?;
         if let Event::Mouse(mouse) = evt {
             handle_mouse(app, mouse);
@@ -61,9 +69,9 @@ fn handle_events(app: &mut App) -> io::Result<()> {
                 }
                 Mode::FileExplorer => {
                     let key_str = config::key_to_string(&key.code, key.modifiers);
-                    let action = app.keybindings.lookup(&key_str).map(|s| s.to_string());
-                    if let Some(ref a) = action {
-                        config::exec_file_explorer(app, a);
+                    if let Some(action) = app.keybindings.lookup(&key_str) {
+                        let action = action.to_string();
+                        config::exec_file_explorer(app, &action);
                     } else if is_bksp || key.code == KeyCode::Esc {
                         app.mode = Mode::Normal;
                     } else {
@@ -72,9 +80,9 @@ fn handle_events(app: &mut App) -> io::Result<()> {
                 }
                 Mode::Search => {
                     let key_str = config::key_to_string(&key.code, key.modifiers);
-                    let action = app.keybindings.lookup(&key_str).map(|s| s.to_string());
-                    if let Some(ref a) = action {
-                        config::exec_search(app, a);
+                    if let Some(action) = app.keybindings.lookup(&key_str) {
+                        let action = action.to_string();
+                        config::exec_search(app, &action);
                     } else if key.code == KeyCode::Esc {
                         app.mode = Mode::Normal;
                         app.search_query.clear();
@@ -88,9 +96,9 @@ fn handle_events(app: &mut App) -> io::Result<()> {
                 }
                 Mode::CommandPalette => {
                     let key_str = config::key_to_string(&key.code, key.modifiers);
-                    let action = app.keybindings.lookup(&key_str).map(|s| s.to_string());
-                    if let Some(ref a) = action {
-                        config::exec_command(app, a);
+                    if let Some(action) = app.keybindings.lookup(&key_str) {
+                        let action = action.to_string();
+                        config::exec_command(app, &action);
                     } else if key.code == KeyCode::Esc {
                         app.mode = Mode::Normal;
                         app.command_input.clear();
@@ -144,16 +152,16 @@ fn handle_events(app: &mut App) -> io::Result<()> {
             }
         }
     }
-    Ok(())
+    Ok(any)
 }
 
 
 fn handle_normal_mode(app: &mut App, code: KeyCode, mods: KeyModifiers) {
     app.status_message.clear();
     let key_str = config::key_to_string(&code, mods);
-    let action = app.keybindings.lookup(&key_str).map(|s| s.to_string());
-    if let Some(ref a) = action {
-        config::exec_normal(app, a);
+    if let Some(action) = app.keybindings.lookup(&key_str) {
+        let action = action.to_string();
+        config::exec_normal(app, &action);
     } else if code == KeyCode::Delete {
         app.delete_forward();
     } else if config::is_backspace(&code, mods) {
@@ -189,12 +197,20 @@ fn handle_normal_mode(app: &mut App, code: KeyCode, mods: KeyModifiers) {
         (KeyCode::Char('c'), KeyModifiers::CONTROL) => app.yank_line(),
         (KeyCode::Char('x'), KeyModifiers::CONTROL) => app.cut_line(),
         (KeyCode::Char('v'), KeyModifiers::CONTROL) => app.paste_clipboard(),
-        (KeyCode::Left, _) if app.cursor_x > 0 => app.cursor_x -= 1,
+        (KeyCode::Left, _) if app.cursor_x > 0 => {
+            app.cursor_x -= 1;
+            let line = &app.buffer[app.cursor_y];
+            app.cursor_byte = line[..app.cursor_byte].chars().next_back().map(|c| app.cursor_byte - c.len_utf8()).unwrap_or(0);
+        }
         (KeyCode::Right, _) => {
             if app.cursor_y < app.buffer.len() {
                 let cc = app.buffer[app.cursor_y].chars().count();
                 if app.cursor_x < cc {
-                    app.cursor_x += 1;
+                    let line = &app.buffer[app.cursor_y];
+                    if let Some(c) = line[app.cursor_byte..].chars().next() {
+                        app.cursor_x += 1;
+                        app.cursor_byte += c.len_utf8();
+                    }
                 }
             }
         }
@@ -208,10 +224,14 @@ fn handle_normal_mode(app: &mut App, code: KeyCode, mods: KeyModifiers) {
                 clamp_cursor_x(app);
             }
         }
-        (KeyCode::Home, _) => app.cursor_x = 0,
+        (KeyCode::Home, _) => {
+            app.cursor_x = 0;
+            app.cursor_byte = 0;
+        }
         (KeyCode::End, _) => {
             if app.cursor_y < app.buffer.len() {
                 app.cursor_x = app.buffer[app.cursor_y].chars().count();
+                app.cursor_byte = app.buffer[app.cursor_y].len();
             }
         }
         (KeyCode::PageUp, _) => {
@@ -388,6 +408,7 @@ fn handle_mouse(app: &mut App, mouse: crossterm::event::MouseEvent) {
                     app.cursor_y = buf_y;
                     let line_len = app.buffer[buf_y].chars().count();
                     app.cursor_x = buf_x.min(line_len);
+                    app.recalc_cursor_byte();
                 }
             }
         }
@@ -423,5 +444,6 @@ fn clamp_cursor_x(app: &mut App) {
         if app.cursor_x > cc {
             app.cursor_x = cc;
         }
+        app.recalc_cursor_byte();
     }
 }

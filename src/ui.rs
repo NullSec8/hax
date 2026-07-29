@@ -5,8 +5,41 @@ use ratatui::{
     text::{Line, Span, Text},
     widgets::{Block, Borders, List, ListItem, Paragraph, BorderType, Clear},
 };
-use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 use crate::app::{App, Mode};
+
+fn char_width(c: char) -> usize {
+    let cp = c as u32;
+    if cp < 0x20 || (0x7F..0xA0).contains(&cp) { return 0; }
+    if cp < 0x1100 { return 1; }
+    if cp <= 0x115F || cp == 0x2329 || cp == 0x232A { return 2; }
+    if (0x2E80..=0x303E).contains(&cp)
+        || (0x3040..=0x309F).contains(&cp)
+        || (0x30A0..=0x30FF).contains(&cp)
+        || (0x3105..=0x312F).contains(&cp)
+        || (0x3130..=0x318E).contains(&cp)
+        || (0x3190..=0x31E3).contains(&cp)
+        || (0x31F0..=0x321E).contains(&cp)
+        || (0x3220..=0x3247).contains(&cp)
+        || (0x3250..=0x4DBF).contains(&cp)
+        || (0x4E00..=0xA4CF).contains(&cp)
+        || (0xA960..=0xA97C).contains(&cp)
+        || (0xAC00..=0xD7A3).contains(&cp)
+        || (0xF900..=0xFAFF).contains(&cp)
+        || (0xFE10..=0xFE19).contains(&cp)
+        || (0xFE30..=0xFE6F).contains(&cp)
+        || (0xFF01..=0xFF60).contains(&cp)
+        || (0xFFE0..=0xFFE6).contains(&cp)
+        || cp >= 0x20000
+    {
+        2
+    } else {
+        1
+    }
+}
+
+fn string_width(s: &str) -> usize {
+    s.chars().map(char_width).sum()
+}
 
 pub fn draw(frame: &mut Frame, app: &mut App) {
     let area = frame.area();
@@ -79,7 +112,7 @@ fn draw_sidebar(frame: &mut Frame, area: Rect, app: &App, theme: &crate::theme::
 
     let max_visible = inner.height as usize;
 
-    let items: Vec<ListItem> = app.file_tree.iter().enumerate()
+    let items = app.file_tree.iter().enumerate()
         .skip(app.file_tree_offset)
         .take(max_visible)
         .map(|(_, path)| {
@@ -95,7 +128,7 @@ fn draw_sidebar(frame: &mut Frame, area: Rect, app: &App, theme: &crate::theme::
                 Style::default().fg(theme.sidebar_fg)
             };
             ListItem::new(display).style(style)
-        }).collect();
+        });
 
     let selected = app.file_tree_selection.saturating_sub(app.file_tree_offset);
     let list = List::new(items)
@@ -154,7 +187,7 @@ fn draw_editor(frame: &mut Frame, area: Rect, app: &App, theme: &crate::theme::E
         let max_w = inner.width.saturating_sub(line_num_width as u16 + 1) as usize;
         let display: String = visible.chars()
             .scan(0, |w, c| {
-                let cw = c.width().unwrap_or(0);
+                let cw = char_width(c);
                 if *w + cw > max_w { None } else { *w += cw; Some(c) }
             })
             .collect();
@@ -170,7 +203,7 @@ fn draw_editor(frame: &mut Frame, area: Rect, app: &App, theme: &crate::theme::E
         let vis_x = app.buffer[app.cursor_y]
             .chars().skip(app.offset_x)
             .take(app.cursor_x.saturating_sub(app.offset_x))
-            .map(|c| c.width().unwrap_or(0))
+            .map(char_width)
             .sum::<usize>();
         let vis_y = app.cursor_y.saturating_sub(app.offset_y);
         if vis_y < max_lines {
@@ -228,8 +261,8 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App, theme: &crate::them
     ];
 
     let mut spans = left_spans;
-    let left_width: usize = spans.iter().map(|s| s.content.as_ref().width()).sum();
-    let right_width: usize = right_spans.iter().map(|s| s.content.as_ref().width()).sum();
+    let left_width: usize = spans.iter().map(|s| string_width(s.content.as_ref())).sum();
+    let right_width: usize = right_spans.iter().map(|s| string_width(s.content.as_ref())).sum();
     let padding = (area.width as usize).saturating_sub(left_width + right_width);
     spans.push(Span::styled(" ".repeat(padding), rest_style));
     spans.extend(right_spans);
@@ -265,13 +298,13 @@ fn draw_search_overlay(frame: &mut Frame, area: Rect, app: &App, theme: &crate::
     frame.render_widget(input, input_area);
 
     let list_height = inner.height.saturating_sub(4);
-    let results: Vec<ListItem> = app.search_results.iter()
+    let results = app.search_results.iter()
         .skip(app.search_offset)
         .take(list_height as usize)
         .map(|(path, line, text)| {
             let name = path.file_name().map(|n| n.to_string_lossy()).unwrap_or_default();
             ListItem::new(format!("{}:{}: {}", name, line, text))
-        }).collect();
+        });
 
     let selected = app.search_selection.saturating_sub(app.search_offset);
     let list = List::new(results)
@@ -304,11 +337,10 @@ fn draw_command_overlay(frame: &mut Frame, area: Rect, app: &App, theme: &crate:
     frame.render_widget(input, input_area);
 
     let list_height = inner.height.saturating_sub(4);
-    let items: Vec<ListItem> = app.get_filtered_commands().iter()
+    let items = app.get_filtered_commands().into_iter()
         .skip(app.command_offset)
         .take(list_height as usize)
-        .map(|(_, name)| ListItem::new(*name))
-        .collect();
+        .map(|(_, name)| ListItem::new(name));
 
     let selected = app.command_selection.saturating_sub(app.command_offset);
     let list = List::new(items)

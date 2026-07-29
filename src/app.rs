@@ -18,6 +18,7 @@ pub struct App {
     pub buffer: Vec<String>,
     pub cursor_x: usize,
     pub cursor_y: usize,
+    pub cursor_byte: usize,
     pub offset_y: usize,
     pub offset_x: usize,
     pub filename: Option<PathBuf>,
@@ -61,6 +62,7 @@ impl App {
             buffer: vec![String::new()],
             cursor_x: 0,
             cursor_y: 0,
+            cursor_byte: 0,
             offset_y: 0,
             offset_x: 0,
             filename: None,
@@ -106,6 +108,19 @@ impl App {
         &self.themes[self.theme_index]
     }
 
+    pub fn recalc_cursor_byte(&mut self) {
+        if self.cursor_y < self.buffer.len() {
+            let line = &self.buffer[self.cursor_y];
+            let cc = line.chars().count();
+            if self.cursor_x > cc {
+                self.cursor_x = cc;
+            }
+            self.cursor_byte = line.chars().take(self.cursor_x).map(|c| c.len_utf8()).sum();
+        } else {
+            self.cursor_byte = 0;
+        }
+    }
+
     pub fn open_file(&mut self, path: PathBuf) {
         if path.is_dir() {
             return;
@@ -120,6 +135,7 @@ impl App {
                 self.buffer = if lines.is_empty() { vec![String::new()] } else { lines };
                 self.cursor_x = 0;
                 self.cursor_y = 0;
+                self.cursor_byte = 0;
                 self.offset_y = 0;
                 self.offset_x = 0;
                 self.modified = false;
@@ -165,6 +181,7 @@ impl App {
         self.buffer = vec![String::new()];
         self.cursor_x = 0;
         self.cursor_y = 0;
+        self.cursor_byte = 0;
         self.offset_y = 0;
         self.offset_x = 0;
         self.modified = false;
@@ -253,25 +270,27 @@ impl App {
         let line = &mut self.buffer[self.cursor_y];
         let char_count = line.chars().count();
         if self.cursor_x <= char_count {
-            let byte_idx: usize = line.chars().take(self.cursor_x).map(|c| c.len_utf8()).sum();
-            line.insert(byte_idx, ch);
+            line.insert(self.cursor_byte, ch);
             self.cursor_x += 1;
+            self.cursor_byte += ch.len_utf8();
             self.modified = true;
         }
     }
 
     pub fn delete_char(&mut self) {
         if self.cursor_x > 0 && self.cursor_y < self.buffer.len() {
-            let byte_idx: usize = self.buffer[self.cursor_y]
-                .chars().take(self.cursor_x - 1).map(|c| c.len_utf8()).sum();
-            self.buffer[self.cursor_y].remove(byte_idx);
+            let line = &mut self.buffer[self.cursor_y];
+            let prev_byte = line[..self.cursor_byte].chars().next_back().map(|c| self.cursor_byte - c.len_utf8()).unwrap_or(0);
+            line.remove(prev_byte);
             self.cursor_x -= 1;
+            self.cursor_byte = prev_byte;
             self.modified = true;
         } else if self.cursor_x == 0 && self.cursor_y > 0 && self.cursor_y < self.buffer.len() {
             let removed = self.buffer.remove(self.cursor_y);
             self.cursor_y -= 1;
             self.cursor_x = self.buffer[self.cursor_y].chars().count();
             self.buffer[self.cursor_y].push_str(&removed);
+            self.recalc_cursor_byte();
             self.modified = true;
         }
     }
@@ -282,9 +301,7 @@ impl App {
         }
         let line_len = self.buffer[self.cursor_y].chars().count();
         if self.cursor_x < line_len {
-            let byte_idx: usize = self.buffer[self.cursor_y]
-                .chars().take(self.cursor_x).map(|c| c.len_utf8()).sum();
-            self.buffer[self.cursor_y].remove(byte_idx);
+            self.buffer[self.cursor_y].remove(self.cursor_byte);
             self.modified = true;
         } else if self.cursor_y + 1 < self.buffer.len() {
             let next = self.buffer.remove(self.cursor_y + 1);
@@ -298,11 +315,11 @@ impl App {
             return;
         }
         let line = &mut self.buffer[self.cursor_y];
-        let byte_idx: usize = line.chars().take(self.cursor_x).map(|c| c.len_utf8()).sum();
-        let rest = line[byte_idx..].to_string();
-        line.truncate(byte_idx);
+        let rest = line[self.cursor_byte..].to_string();
+        line.truncate(self.cursor_byte);
         self.cursor_y += 1;
         self.cursor_x = 0;
+        self.cursor_byte = 0;
         self.buffer.insert(self.cursor_y, rest);
         self.modified = true;
     }
@@ -330,6 +347,7 @@ impl App {
                 self.cursor_y = self.buffer.len() - 1;
             }
             self.cursor_x = self.cursor_x.min(self.buffer[self.cursor_y].chars().count());
+            self.recalc_cursor_byte();
             self.modified = true;
             self.status_message = "Cut line".into();
         }
@@ -337,16 +355,33 @@ impl App {
 
     pub fn paste_clipboard(&mut self) {
         let data = self.clipboard.clone();
-        if data.is_empty() {
+        if data.is_empty() || self.cursor_y >= self.buffer.len() {
             return;
         }
-        for ch in data.chars() {
-            if ch == '\n' {
-                self.new_line();
-            } else {
-                self.insert_char(ch);
+        let pasted: Vec<&str> = data.split('\n').collect();
+        if pasted.is_empty() { return; }
+
+        let right = self.buffer[self.cursor_y][self.cursor_byte..].to_string();
+        self.buffer[self.cursor_y].truncate(self.cursor_byte);
+        self.buffer[self.cursor_y].push_str(pasted[0]);
+
+        let n = pasted.len();
+        if n > 1 {
+            let mut last = pasted[n - 1].to_string();
+            last.push_str(&right);
+            for i in 1..n - 1 {
+                self.buffer.insert(self.cursor_y + i, pasted[i].to_string());
             }
+            self.buffer.insert(self.cursor_y + n - 1, last);
+            self.cursor_y = self.cursor_y + n - 1;
+            self.cursor_x = pasted[n - 1].chars().count();
+        } else {
+            self.buffer[self.cursor_y].push_str(&right);
+            self.cursor_x += pasted[0].chars().count();
         }
+        self.cursor_byte = self.buffer[self.cursor_y]
+            .chars().take(self.cursor_x).map(|c| c.len_utf8()).sum();
+        self.modified = true;
     }
 
     pub fn execute_command(&mut self, cmd: &str) {
@@ -383,3 +418,4 @@ impl App {
         self.command_input.clear();
     }
 }
+
