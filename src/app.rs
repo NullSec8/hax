@@ -100,6 +100,11 @@ impl App {
             sidebar_height: 0,
             overlay_list_height: 0,
         };
+        if let Some(ref name) = app.keybindings.theme {
+            if let Some(idx) = app.themes.iter().position(|t| t.name.to_lowercase() == name.to_lowercase()) {
+                app.theme_index = idx;
+            }
+        }
         app.refresh_file_tree();
         app
     }
@@ -410,6 +415,7 @@ impl App {
                     if let Some(idx) = self.themes.iter().position(|t| t.name.to_lowercase() == name.to_lowercase()) {
                         self.theme_index = idx;
                         self.status_message = format!("Theme: {}", self.themes[idx].name);
+                        crate::config::KeyBindings::save_theme(self.themes[idx].name);
                     }
                 }
             }

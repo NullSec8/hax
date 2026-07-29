@@ -3,39 +3,71 @@ use crossterm::event::{KeyCode, KeyModifiers};
 
 pub struct KeyBindings {
     overrides: HashMap<String, String>,
+    pub theme: Option<String>,
 }
 
 fn normalize(s: &str) -> String {
     s.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect()
 }
 
+fn config_path() -> Option<std::path::PathBuf> {
+    std::env::var("XDG_CONFIG_HOME")
+        .ok()
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var("HOME").ok().map(|h| std::path::PathBuf::from(h).join(".config"))
+        })
+        .map(|p| p.join("hax").join("config"))
+}
+
 impl KeyBindings {
     pub fn load() -> Self {
         let mut overrides = HashMap::new();
-        let config_dir = std::env::var("XDG_CONFIG_HOME")
-            .ok()
-            .map(std::path::PathBuf::from)
-            .or_else(|| {
-                std::env::var("HOME")
-                    .ok()
-                    .map(|h| std::path::PathBuf::from(h).join(".config"))
-            })
-            .map(|p| p.join("hax"));
-        if let Some(dir) = config_dir {
-            let path = dir.join("config");
+        let mut theme = None;
+        if let Some(path) = config_path() {
             if let Ok(content) = std::fs::read_to_string(&path) {
                 for line in content.lines() {
                     let line = line.trim();
                     if line.is_empty() || line.starts_with('#') {
                         continue;
                     }
-                    if let Some((key, action)) = line.split_once('=') {
-                        overrides.insert(normalize(key.trim()), normalize(action.trim()));
+                    if let Some((key, value)) = line.split_once('=') {
+                        let key = key.trim();
+                        let value = value.trim();
+                        if normalize(key) == "theme" {
+                            theme = Some(value.to_string());
+                        } else {
+                            overrides.insert(normalize(key), normalize(value));
+                        }
                     }
                 }
             }
         }
-        KeyBindings { overrides }
+        KeyBindings { overrides, theme }
+    }
+
+    pub fn save_theme(theme_name: &str) {
+        let Some(path) = config_path() else { return };
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        let content = std::fs::read_to_string(&path).unwrap_or_default();
+        let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
+        // find or replace theme= line
+        let mut found = false;
+        for line in &mut lines {
+            if let Some((key, _)) = line.split_once('=') {
+                if normalize(key.trim()) == "theme" {
+                    *line = format!("theme = {theme_name}");
+                    found = true;
+                    break;
+                }
+            }
+        }
+        if !found {
+            lines.push(format!("theme = {theme_name}"));
+        }
+        let _ = std::fs::write(&path, lines.join("\n") + "\n");
     }
 
     pub fn lookup(&self, key: &str) -> Option<&str> {
