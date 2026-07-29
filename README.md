@@ -109,6 +109,14 @@ Actions available per mode are documented in the config file itself (85 lines of
 
 ---
 
+## 100% Rust
+
+Every line of hax is Rust — no C dependencies, no build scripts, no proc macros, no unsafe blocks, no external C libraries linked. Just safe Rust through and through. The dependency tree (83 crates) is entirely pure Rust too.
+
+One `cargo build --release` and you get a statically linked binary that runs on any Linux machine with the same `x86_64` — no interpreters, no runtimes, no containers.
+
+---
+
 ## Performance comparison
 
 | Editor | Disk | RAM (idle) | Startup | Language |
