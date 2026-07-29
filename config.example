@@ -1,0 +1,38 @@
+# ===========================================================================
+#  HAX EDITOR - KEYBINDING CONFIG EXAMPLE
+# ===========================================================================
+# Copy this file to ~/.config/hax/config and edit it.
+# Format:  key = action
+#
+# Key names (case and separators don't matter):
+#   ctrl-q, Ctrl+Q, ctrlq, Ctrl q    → all mean Ctrl+Q
+#   pageup, PageUp, page_up, Page Up → all mean Page Up
+#
+# Full list of actions on the next page.
+# ===========================================================================
+
+# === NORMAL MODE actions ===
+#   quit              save              open
+#   search            command_palette   new_file
+#   toggle_sidebar    yank              cut
+#   paste             cursor_left       cursor_right
+#   cursor_up         cursor_down       cursor_home
+#   cursor_end        page_up           page_down
+#   new_line          insert_tab        delete_forward
+#   delete_backward   escape
+
+# === FILE EXPLORER actions ===
+#   up      down    open    rename
+#   parent  back
+
+# === SEARCH actions ===
+#   up    down    open    back
+
+# === COMMAND PALETTE actions ===
+#   up      down    execute    back
+
+# --- Vim-style example ---
+# ctrl-h = cursor_left
+# ctrl-j = cursor_down
+# ctrl-k = cursor_up
+# ctrl-l = cursor_right

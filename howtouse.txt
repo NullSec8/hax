@@ -1,0 +1,109 @@
+EDITOR - HOW TO USE
+===================
+
+RUNNING
+-------
+  hax <filename>      Open file directly
+  hax                 Start with empty buffer
+
+  Installed at: ~/.local/bin/hax (258 KB)
+
+KEYBINDINGS
+-----------
+  NORMAL MODE:
+    Ctrl+Q    Quit (prompts if unsaved)
+    Ctrl+S    Save file (prompts for name if untitled)
+    Ctrl+O    Open file (file explorer)
+    Ctrl+F    Search across files in current directory
+    Ctrl+P    Command palette
+    Ctrl+N    New file
+    Ctrl+B    Toggle sidebar
+    Arrows    Move cursor
+    Home/End  Jump to start/end of line
+    PgUp/PgDn Page up/down
+    Enter     New line
+    Ctrl+C    Copy (yank) current line
+    Ctrl+X    Cut current line
+    Ctrl+V    Paste clipboard at cursor
+    Delete    Delete character forward
+    Backspace Delete character backward
+    Tab       Indent (4 spaces)
+    Mouse     Click to position cursor, scroll wheel to scroll
+
+  FILE EXPLORER (Ctrl+O):
+    j/k or Up/Down     Navigate
+    Enter              Open file / enter directory
+    r                  Rename selected file
+    h                  Go to parent directory
+    Esc                Back to editor
+
+  SEARCH (Ctrl+F):
+    Type to search (searches all non-.git files in cwd)
+    j/k or Up/Down     Navigate results
+    Enter              Open selected result
+    Esc                Back to editor
+
+  COMMAND PALETTE (Ctrl+P):
+    Type to filter commands
+    j/k or Up/Down     Navigate
+    Enter              Execute
+    Esc                Back to editor
+
+  COMMANDS:
+    save               Save current file
+    quit               Exit editor (prompts if unsaved)
+    open               Open file explorer
+    new                New file (safeguarded if unsaved)
+    close              Close current file
+    toggle sidebar     Show/hide sidebar
+    theme <name>       Switch theme (monokai, dracula, nord,
+                       onedark, solarizeddark, gruvbox)
+
+  SAVEAS:
+    Type filename, Enter to confirm, Esc to cancel
+
+  CONFIRM QUIT:
+    y / Enter  – Quit without saving
+    n / Esc    – Cancel
+
+STATUS BAR
+----------
+Left:  MODE | filename | language | modified?(+)
+Right: line:col | total lines | theme name
+
+When a status message is active (e.g. "Saved: ..."), it replaces
+the normal status bar until the next keypress.
+
+SIDEBAR
+-------
+Shows files/dirs in current directory. Directories have a trailing /
+and are shown in accent color. > marks the selected file.
+
+THEMES
+------
+6 hardcoded themes: Monokai, Dracula, Nord, OneDark,
+SolarizedDark, Gruvbox. Switch via command palette.
+
+CONFIGURATION
+-------------
+  Keybindings: edit ~/.config/hax/config
+  All defaults are listed there (commented out). Just uncomment
+  and change what you want. Key names can be written in any style:
+  ctrl-q, Ctrl+Q, ctrlq all work.
+
+  Actions for NORMAL mode: quit, save, open, search,
+  command_palette, new_file, toggle_sidebar, yank, cut, paste,
+  cursor_left/right/up/down, cursor_home/end, page_up/down,
+  new_line, insert_tab, delete_forward, delete_backward, escape.
+
+  File explorer: up, down, open, rename, parent, back.
+  Search: up, down, open, back.
+  Command palette: up, down, execute, back.
+
+NOTES
+-----
+- Flow control (Ctrl+S/Ctrl+Q) is disabled on start and restored
+  on exit so those shortcuts work in the editor.
+- Unicode display width is respected (CJK characters render
+  correctly).
+- ~2.5 MB RAM at idle, 0% CPU when idle, 259 KB on disk.

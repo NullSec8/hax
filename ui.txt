@@ -1,0 +1,150 @@
+UI ARCHITECTURE
+===============
+
+Libraries
+---------
+  ratatui 0.29   – immediate-mode TUI framework (layout, widgets, styling)
+  crossterm 0.28  – terminal backend (raw mode, alternate screen, mouse)
+  unicode-width   – character display width for CJK truncation
+
+Screen Layout (every frame)
+---------------------------
+  +--------------------------------------------+
+  | Sidebar (24) |  Editor Area (remaining)    |
+  |   (optional) |  +------------------------+ |
+  | file_tree    |  | text buffer view port  | |
+  | with border  |  | line numbers + content | |
+  |              |  +------------------------+ |
+  |              |  | Status bar (1 line)     | |
+  |              |  | mode | file | lang | .. | |
+  +--------------------------------------------+
+
+  The layout is rebuilt every frame using ratatui's Layout::split().
+  If sidebar is hidden, the editor spans the full width.
+
+  minimum terminal: 40 x 10 characters ("Terminal too small" message)
+
+Overlay System
+--------------
+  Overlays are drawn ON TOP of the editor by rendering a Clear widget
+  followed by a bordered Block. This creates the "popup" effect.
+
+  Each overlay:
+    - Uses centered_rect(percent_x, percent_y, area) for positioning
+    - Has a title, rounded borders, and a styled border in status_mode
+    - Contains an input field (Borders::BOTTOM) and/or a List
+    - Sets the cursor position inside the input field
+
+  Overlays (percent_x, percent_y):
+    Search:         (60, 60) – input + scrollable results list
+    CommandPalette: (60, 40) – input + filtered command list
+    SaveAs:         (50, 20) – filename input
+    Rename:         (50, 20) – filename input (pre-filled)
+    ConfirmQuit:    (40, 20) – static text prompt
+
+  The cursor is drawn at the overlay's input field, NOT in the editor
+  behind it (SaveAs and Rename handle this correctly).
+
+centered_rect Algorithm
+-----------------------
+  Takes percentage of terminal to use and computes a centred Rect:
+
+    popup_layout = Layout::vertical([
+        Length((h * (100 - pct_y)) / 200),   // top padding
+        Length((h * pct_y) / 100),           // content
+        Length((h * (100 - pct_y)) / 200),   // bottom padding
+    ]).split(area)
+
+    Then horizontally centre the middle segment the same way.
+
+  This produces evenly balanced top/bottom and left/right margins.
+
+Editor Area
+-----------
+  Line numbers:   right-aligned in a fixed-width column (min 3 chars,
+                  grows with buffer size). Active line has different
+                  colour and cursor_line background.
+
+  Content text:   offset_x/offset_y determine the visible viewport.
+                  Characters beyond max_w are truncated using
+                  UnicodeWidthChar to respect CJK display width.
+
+  Cursor line:    Cleared with Clear widget, then re-rendered with
+                  cursor_line background colour.
+
+  Cursor position: Calculated as display-width offset from offset_x,
+                   placed only in Normal mode. Skip if cursor scrolled
+                   off-screen or beyond the editor width.
+
+Theme System
+------------
+  6 hardcoded colour themes in src/theme.rs:
+
+    Monokai, Dracula, Nord, OneDark, SolarizedDark, Gruvbox
+
+  Each theme defines these fields used by the UI:
+
+    bg                editor background
+    fg                default text
+    cursor_line       cursor line highlight
+    selection         overlay list selection
+    line_numbers      line number colour
+    line_numbers_active  current line number
+    status_bg         status bar background
+    status_fg         status bar foreground
+    status_mode       mode indicator / accents
+    sidebar_bg        sidebar background
+    sidebar_fg        sidebar foreground
+    sidebar_selected  sidebar highlight
+    name              display name
+
+  Dead fields (syntax, scrollbar, search_*) were removed.
+
+Status Bar
+----------
+  Drawn as a 1-line Paragraph at the bottom. Two modes:
+
+    Normal: left-aligned [MODE] filename language modified(+)
+            right-aligned line:col | total | theme
+
+    Message: when app.status_message is non-empty, displays
+             "  <message>" in accent colour instead.
+
+  Message auto-clears on next Normal-mode keypress.
+
+Sidebar
+-------
+  Width 24 columns, right border in line_numbers colour.
+  Shows file tree (sorted OsStr). Directories get a trailing /
+  and accent colour. Selected item uses highlight_symbol "> ".
+
+  The sidebar_height is stored per-frame for scroll calculations
+  in the file explorer event handler.
+
+Mouse Support
+-------------
+  Click:   In Normal mode, maps terminal (col,row) to buffer coords
+           using stored editor_x/editor_y origin. Clamps to line length.
+           Ignores clicks outside visible_lines or below status bar.
+
+  Scroll:  ScrollUp/ScrollDown adjust offset_y by 3, then call
+           clamp_cursor_visible() to keep cursor in view.
+
+  Mouse is captured with EnableMouseCapture / DisableMouseCapture.
+
+Code Organization
+-----------------
+  src/ui.rs (404 lines) – all drawing code
+    draw()               – main entry, computes layout, dispatches
+    draw_sidebar()       – file tree list with highlight
+    draw_editor()        – line numbers, text content, cursor
+    draw_status_bar()    – mode/file/cursor info or status message
+    draw_search_overlay()
+    draw_command_overlay()
+    draw_saveas_overlay()
+    draw_rename_overlay()
+    draw_confirm_quit_overlay()
+    centered_rect()      – helper for overlay positioning
+
+  Theming is separate (theme.rs) – UI never hardcodes colours,
+  always reads from the current EditorTheme.
