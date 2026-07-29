@@ -9,7 +9,7 @@
   hax                Start with empty buffer
 ```
 
-hax is a terminal-based text editor written in Rust. It fits in **266 KB** on disk, uses **~2.5 MB of RAM**, and starts in **~11 ms**.
+hax is a terminal-based text editor written in Rust. It fits in **267 KB** on disk, uses **~2.3 MB of RAM**, and starts in **~2 ms**.
 
 ---
 
@@ -32,14 +32,20 @@ No plugins, no LSP, no file tree watchers, no telemetry, no JavaScript runtime. 
 
 | Metric | Value | Why |
 |--------|-------|-----|
-| Binary | **266 KB** (UPX compressed) | `opt-level = "z"`, LTO, `codegen-units = 1`, `panic = "abort"`, `strip = true`, then UPX packed |
-| Uncompressed | 600 KB | Same build flags, no UPX |
-| RAM (idle) | **~2.5 MB RSS** | No background threads, no file watchers, no JS runtime |
-| CPU (idle) | **~0%** | Event loop sleeps between frames (5 ms poll timeout) |
-| Startup | **~11 ms** | No config parsing at startup (lazy), no plugin loading |
-| Dependencies | **83 total** (3 direct) | crossterm, ratatui, unicode-width — no proc macros, no build scripts |
-| Source | **1,285 lines** of Rust | 4 files — app.rs (311), main.rs (441), ui.rs (404), theme.rs (129) |
+| Binary | **267 KB** (UPX compressed) | `opt-level = "z"`, LTO, `codegen-units = 1`, `panic = "abort"`, `strip = true`, then UPX packed |
+| Uncompressed | **603 KB** | Same build flags, no UPX |
+| RAM (idle) | **~2.3 MB RSS** | No background threads, no file watchers, no JS runtime |
+| CPU (idle) | **~0%** | Dirty-flag render: 0 draws at idle when no events |
+| Startup | **~2 ms** | No config parsing (lazy), no plugin loading |
+| Dependencies | **82 total** (2 direct) | crossterm, ratatui — no proc macros, no build scripts |
+| Source | **1,736 lines** of Rust | 5 files — app.rs (421), main.rs (449), ui.rs (436), config.rs (301), theme.rs (129) |
 | Warnings | **0** | Clean at all build profiles |
+
+## Performance optimizations
+
+- **Dirty-flag render**: Only redraws the terminal when an event is processed. At idle: 0 draws, 0 bytes written.
+- **cursor_byte cache**: Byte offset cached on every edit/cursor move — O(1) insert/delete instead of O(cursor_x) scan.
+- **Bulk paste**: Pastes multi-line clipboard in O(n) rather than O(n²) char-by-char insert.
 
 ### Build flags (Cargo.toml)
 
@@ -115,7 +121,7 @@ Actions available per mode are documented in the config file itself (85 lines of
 
 ## 100% Rust
 
-Every line of hax is Rust — no C dependencies, no build scripts, no proc macros, no unsafe blocks, no external C libraries linked. Just safe Rust through and through. The dependency tree (83 crates) is entirely pure Rust too.
+Every line of hax is Rust — no C dependencies, no build scripts, no proc macros, no unsafe blocks, no external C libraries linked. Just safe Rust through and through. The dependency tree (82 crates) is entirely pure Rust too.
 
 One `cargo build --release` and you get a statically linked binary that runs on any Linux machine with the same `x86_64` — no interpreters, no runtimes, no containers.
 
@@ -125,7 +131,7 @@ One `cargo build --release` and you get a statically linked binary that runs on 
 
 | Editor | Disk | RAM (idle) | Startup | Language |
 |--------|------|------------|---------|----------|
-| **hax** | **266 KB** | **~2.5 MB** | **~11 ms** | Rust |
+| **hax** | **267 KB** | **~2.3 MB** | **~2 ms** | Rust |
 | nano | ~500 KB | ~3 MB | ~20 ms | C |
 | micro | ~5 MB | ~10 MB | ~50 ms | Go |
 | kakoune | ~2 MB | ~5 MB | ~30 ms | C++ |
@@ -146,7 +152,7 @@ cargo build --release
 cp target/release/hax ~/.local/bin/
 ```
 
-Requires Rust 2021 edition. Dependencies: crossterm, ratatui, unicode-width.
+Requires Rust 2021 edition. Dependencies: crossterm, ratatui.
 
 ---
 
