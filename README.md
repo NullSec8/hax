@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="hax.png" alt="hax logo" width="200">
+</p>
+
 # hax — a minimal TUI text editor
 
 ```
