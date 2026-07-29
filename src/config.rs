@@ -138,15 +138,15 @@ pub fn exec_normal(app: &mut crate::app::App, action: &str) {
         "cursor_left" => {
             if app.cursor_x > 0 {
                 app.cursor_x -= 1;
-                let line = &app.buffer[app.cursor_y];
+                let line = app.get_line(app.cursor_y);
                 app.cursor_byte = line[..app.cursor_byte].chars().next_back().map(|c| app.cursor_byte - c.len_utf8()).unwrap_or(0);
             }
         }
         "cursor_right" => {
-            if app.cursor_y < app.buffer.len() {
-                let cc = app.buffer[app.cursor_y].chars().count();
+            if app.cursor_y < app.line_count() {
+                let cc = app.get_line(app.cursor_y).chars().count();
                 if app.cursor_x < cc {
-                    let line = &app.buffer[app.cursor_y];
+                    let line = app.get_line(app.cursor_y);
                     if let Some(c) = line[app.cursor_byte..].chars().next() {
                         app.cursor_x += 1;
                         app.cursor_byte += c.len_utf8();
@@ -161,7 +161,7 @@ pub fn exec_normal(app: &mut crate::app::App, action: &str) {
             }
         }
         "cursor_down" => {
-            if app.cursor_y + 1 < app.buffer.len() {
+            if app.cursor_y + 1 < app.line_count() {
                 app.cursor_y += 1;
                 app.recalc_cursor_byte();
             }
@@ -171,9 +171,9 @@ pub fn exec_normal(app: &mut crate::app::App, action: &str) {
             app.cursor_byte = 0;
         }
         "cursor_end" => {
-            if app.cursor_y < app.buffer.len() {
-                app.cursor_x = app.buffer[app.cursor_y].chars().count();
-                app.cursor_byte = app.buffer[app.cursor_y].len();
+            if app.cursor_y < app.line_count() {
+                app.cursor_x = app.get_line(app.cursor_y).chars().count();
+                app.cursor_byte = app.get_line(app.cursor_y).len();
             }
         }
         "page_up" => {
@@ -181,7 +181,7 @@ pub fn exec_normal(app: &mut crate::app::App, action: &str) {
             app.recalc_cursor_byte();
         }
         "page_down" => {
-            app.cursor_y = (app.cursor_y + 10).min(app.buffer.len().saturating_sub(1));
+            app.cursor_y = (app.cursor_y + 10).min(app.line_count().saturating_sub(1));
             app.recalc_cursor_byte();
         }
         "new_line" => app.new_line(),

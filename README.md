@@ -33,18 +33,21 @@ No plugins, no LSP, no file tree watchers, no telemetry, no JavaScript runtime. 
 | Metric | Value | Why |
 |--------|-------|-----|
 | Binary | **267 KB** (UPX compressed) | `opt-level = "z"`, LTO, `codegen-units = 1`, `panic = "abort"`, `strip = true`, then UPX packed |
-| Uncompressed | **603 KB** | Same build flags, no UPX |
-| RAM (idle) | **~2.3 MB RSS** | No background threads, no file watchers, no JS runtime |
+| Uncompressed | **609 KB** | Same build flags, no UPX |
+| RAM (idle) | **~2.4 MB RSS** | No background threads, no file watchers, no JS runtime |
 | CPU (idle) | **~0%** | Dirty-flag render: 0 draws at idle when no events |
-| Startup | **~2 ms** | No config parsing (lazy), no plugin loading |
+| Startup (empty) | **~2 ms** | No config parsing (lazy), no plugin loading |
+| Startup (100K lines) | **~11 ms** | Lazy line loading: one file read, no per-line allocs |
+| Startup (500K lines) | **~50 ms** | Same lazy approach, ~10 MB RSS until first edit |
+| Edit latency | **~1.2 ms** | 500µs poll timeout + dirty-flag render |
 | Dependencies | **82 total** (2 direct) | crossterm, ratatui — no proc macros, no build scripts |
-| Source | **1,736 lines** of Rust | 5 files — app.rs (421), main.rs (449), ui.rs (436), config.rs (301), theme.rs (129) |
+| Source | **~1,800 lines** of Rust | 5 files — app.rs (489), main.rs (449), ui.rs (436), config.rs (333), theme.rs (129) |
 | Warnings | **0** | Clean at all build profiles |
-| Large file (100K lines) | **~25 ms** to interactive, **~11 MB RSS** | O(n) read+split per line |
-| Large file (500K lines) | **~68 ms** to interactive, **~44 MB RSS** | Limited by `Vec<String>` per-line overhead; practical ceiling ~500K lines |
 
 ## Performance optimizations
 
+- **Lazy line loading**: Files are loaded into a single `String` with a `Vec<usize>` of line offsets — one allocation total instead of one per line. `Vec<String>` split is deferred until the first edit, making open-and-browse instant.
+- **500µs poll timeout**: Drops keystroke-to-screen latency from ~5ms to ~1.2ms. Combined with dirty-flag render, CPU at idle is still 0%.
 - **Dirty-flag render**: Only redraws the terminal when an event is processed. At idle: 0 draws, 0 bytes written.
 - **cursor_byte cache**: Byte offset cached on every edit/cursor move — O(1) insert/delete instead of O(cursor_x) scan.
 - **Bulk paste**: Pastes multi-line clipboard in O(n) rather than O(n²) char-by-char insert.

@@ -50,7 +50,7 @@ fn handle_events(app: &mut App) -> io::Result<bool> {
     // process all queued events each frame for instant response
     let mut any = false;
     loop {
-        if !event::poll(std::time::Duration::from_millis(5))? {
+        if !event::poll(std::time::Duration::from_micros(500))? {
             break;
         }
         any = true;
@@ -199,14 +199,14 @@ fn handle_normal_mode(app: &mut App, code: KeyCode, mods: KeyModifiers) {
         (KeyCode::Char('v'), KeyModifiers::CONTROL) => app.paste_clipboard(),
         (KeyCode::Left, _) if app.cursor_x > 0 => {
             app.cursor_x -= 1;
-            let line = &app.buffer[app.cursor_y];
+            let line = app.get_line(app.cursor_y);
             app.cursor_byte = line[..app.cursor_byte].chars().next_back().map(|c| app.cursor_byte - c.len_utf8()).unwrap_or(0);
         }
         (KeyCode::Right, _) => {
-            if app.cursor_y < app.buffer.len() {
-                let cc = app.buffer[app.cursor_y].chars().count();
+            if app.cursor_y < app.line_count() {
+                let cc = app.get_line(app.cursor_y).chars().count();
                 if app.cursor_x < cc {
-                    let line = &app.buffer[app.cursor_y];
+                    let line = app.get_line(app.cursor_y);
                     if let Some(c) = line[app.cursor_byte..].chars().next() {
                         app.cursor_x += 1;
                         app.cursor_byte += c.len_utf8();
@@ -219,7 +219,7 @@ fn handle_normal_mode(app: &mut App, code: KeyCode, mods: KeyModifiers) {
             clamp_cursor_x(app);
         }
         (KeyCode::Down, _) => {
-            if app.cursor_y + 1 < app.buffer.len() {
+            if app.cursor_y + 1 < app.line_count() {
                 app.cursor_y += 1;
                 clamp_cursor_x(app);
             }
@@ -229,9 +229,9 @@ fn handle_normal_mode(app: &mut App, code: KeyCode, mods: KeyModifiers) {
             app.cursor_byte = 0;
         }
         (KeyCode::End, _) => {
-            if app.cursor_y < app.buffer.len() {
-                app.cursor_x = app.buffer[app.cursor_y].chars().count();
-                app.cursor_byte = app.buffer[app.cursor_y].len();
+            if app.cursor_y < app.line_count() {
+                app.cursor_x = app.get_line(app.cursor_y).chars().count();
+                app.cursor_byte = app.get_line(app.cursor_y).len();
             }
         }
         (KeyCode::PageUp, _) => {
@@ -239,7 +239,7 @@ fn handle_normal_mode(app: &mut App, code: KeyCode, mods: KeyModifiers) {
             clamp_cursor_x(app);
         }
         (KeyCode::PageDown, _) => {
-            app.cursor_y = (app.cursor_y + 10).min(app.buffer.len().saturating_sub(1));
+            app.cursor_y = (app.cursor_y + 10).min(app.line_count().saturating_sub(1));
             clamp_cursor_x(app);
         }
         (KeyCode::Enter, _) => app.new_line(),
@@ -404,9 +404,9 @@ fn handle_mouse(app: &mut App, mouse: crossterm::event::MouseEvent) {
                 }
                 let buf_y = rel_y + app.offset_y;
                 let buf_x = (col - app.editor_x) as usize + app.offset_x;
-                if buf_y < app.buffer.len() {
+                if buf_y < app.line_count() {
                     app.cursor_y = buf_y;
-                    let line_len = app.buffer[buf_y].chars().count();
+                    let line_len = app.get_line(buf_y).chars().count();
                     app.cursor_x = buf_x.min(line_len);
                     app.recalc_cursor_byte();
                 }
@@ -419,7 +419,7 @@ fn handle_mouse(app: &mut App, mouse: crossterm::event::MouseEvent) {
             clamp_cursor_visible(app);
         }
         MouseEventKind::ScrollDown => {
-            let max_offset = app.buffer.len().saturating_sub(app.visible_lines);
+            let max_offset = app.line_count().saturating_sub(app.visible_lines);
             app.offset_y = (app.offset_y + 3).min(max_offset);
             clamp_cursor_visible(app);
         }
@@ -432,15 +432,15 @@ fn clamp_cursor_visible(app: &mut App) {
     app.cursor_y = app.cursor_y
         .max(app.offset_y)
         .min(app.offset_y + vis_lines - 1);
-    if app.cursor_y < app.buffer.len() {
-        let line_len = app.buffer[app.cursor_y].chars().count();
+    if app.cursor_y < app.line_count() {
+        let line_len = app.get_line(app.cursor_y).chars().count();
         app.cursor_x = app.cursor_x.min(line_len);
     }
 }
 
 fn clamp_cursor_x(app: &mut App) {
-    if app.cursor_y < app.buffer.len() {
-        let cc = app.buffer[app.cursor_y].chars().count();
+    if app.cursor_y < app.line_count() {
+        let cc = app.get_line(app.cursor_y).chars().count();
         if app.cursor_x > cc {
             app.cursor_x = cc;
         }

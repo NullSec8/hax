@@ -16,6 +16,8 @@ pub enum Mode {
 pub struct App {
     pub mode: Mode,
     pub buffer: Vec<String>,
+    pub file_content: Option<String>,
+    pub line_starts: Vec<usize>,
     pub cursor_x: usize,
     pub cursor_y: usize,
     pub cursor_byte: usize,
@@ -60,6 +62,8 @@ impl App {
         let mut app = App {
             mode: Mode::Normal,
             buffer: vec![String::new()],
+            file_content: None,
+            line_starts: Vec::new(),
             cursor_x: 0,
             cursor_y: 0,
             cursor_byte: 0,
@@ -113,14 +117,52 @@ impl App {
         &self.themes[self.theme_index]
     }
 
+    pub fn line_count(&self) -> usize {
+        if self.file_content.is_some() {
+            self.line_starts.len()
+        } else {
+            self.buffer.len()
+        }
+    }
+
+    pub fn get_line(&self, n: usize) -> &str {
+        if let Some(ref c) = self.file_content {
+            let start = self.line_starts[n];
+            let end = if n + 1 < self.line_starts.len() {
+                self.line_starts[n + 1] - 1
+            } else {
+                c.len()
+            };
+            &c[start..end]
+        } else {
+            &self.buffer[n]
+        }
+    }
+
+    pub fn ensure_split(&mut self) {
+        let Some(content) = self.file_content.take() else { return };
+        let mut lines: Vec<String> = Vec::with_capacity(self.line_starts.len());
+        for i in 0..self.line_starts.len() {
+            let start = self.line_starts[i];
+            let end = if i + 1 < self.line_starts.len() {
+                self.line_starts[i + 1] - 1
+            } else {
+                content.len()
+            };
+            lines.push(content[start..end].to_string());
+        }
+        self.buffer = lines;
+        self.line_starts.clear();
+    }
+
     pub fn recalc_cursor_byte(&mut self) {
-        if self.cursor_y < self.buffer.len() {
-            let line = &self.buffer[self.cursor_y];
-            let cc = line.chars().count();
+        if self.cursor_y < self.line_count() {
+            let cc = self.get_line(self.cursor_y).chars().count();
             if self.cursor_x > cc {
                 self.cursor_x = cc;
             }
-            self.cursor_byte = line.chars().take(self.cursor_x).map(|c| c.len_utf8()).sum();
+            self.cursor_byte = self.get_line(self.cursor_y)
+                .chars().take(self.cursor_x).map(|c| c.len_utf8()).sum();
         } else {
             self.cursor_byte = 0;
         }
@@ -136,8 +178,15 @@ impl App {
         }
         match fs::read_to_string(&path) {
             Ok(content) => {
-                let lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
-                self.buffer = if lines.is_empty() { vec![String::new()] } else { lines };
+                self.buffer.clear();
+                self.file_content = Some(content);
+                let content = self.file_content.as_ref().unwrap();
+                self.line_starts = std::iter::once(0)
+                    .chain(content.match_indices('\n').map(|(i, _)| i + 1))
+                    .collect();
+                if content.ends_with('\n') && self.line_starts.len() > 1 {
+                    self.line_starts.pop();
+                }
                 self.cursor_x = 0;
                 self.cursor_y = 0;
                 self.cursor_byte = 0;
@@ -165,9 +214,13 @@ impl App {
 
     pub fn flush_file(&mut self) {
         let path = self.filename.as_ref().unwrap().clone();
-        let joined = self.buffer.join("\n");
-        let content = if joined.is_empty() { joined } else { joined + "\n" };
-        match fs::write(&path, &content) {
+        let result = if let Some(ref c) = self.file_content {
+            if c.ends_with('\n') { fs::write(&path, c) } else { fs::write(&path, format!("{c}\n")) }
+        } else {
+            let joined = self.buffer.join("\n");
+            if joined.is_empty() { fs::write(&path, "") } else { fs::write(&path, joined + "\n") }
+        };
+        match result {
             Ok(_) => {
                 self.modified = false;
                 self.status_message = format!("Saved: {}", path.display());
@@ -184,6 +237,8 @@ impl App {
             return;
         }
         self.buffer = vec![String::new()];
+        self.file_content = None;
+        self.line_starts.clear();
         self.cursor_x = 0;
         self.cursor_y = 0;
         self.cursor_byte = 0;
@@ -269,6 +324,7 @@ impl App {
     }
 
     pub fn insert_char(&mut self, ch: char) {
+        self.ensure_split();
         if self.cursor_y >= self.buffer.len() {
             return;
         }
@@ -283,6 +339,7 @@ impl App {
     }
 
     pub fn delete_char(&mut self) {
+        self.ensure_split();
         if self.cursor_x > 0 && self.cursor_y < self.buffer.len() {
             let line = &mut self.buffer[self.cursor_y];
             let prev_byte = line[..self.cursor_byte].chars().next_back().map(|c| self.cursor_byte - c.len_utf8()).unwrap_or(0);
@@ -301,6 +358,7 @@ impl App {
     }
 
     pub fn delete_forward(&mut self) {
+        self.ensure_split();
         if self.cursor_y >= self.buffer.len() {
             return;
         }
@@ -316,6 +374,7 @@ impl App {
     }
 
     pub fn new_line(&mut self) {
+        self.ensure_split();
         if self.cursor_y >= self.buffer.len() {
             return;
         }
@@ -336,13 +395,14 @@ impl App {
     }
 
     pub fn yank_line(&mut self) {
-        if self.cursor_y < self.buffer.len() {
-            self.clipboard = self.buffer[self.cursor_y].clone() + "\n";
+        if self.cursor_y < self.line_count() {
+            self.clipboard = self.get_line(self.cursor_y).to_string() + "\n";
             self.status_message = "Yanked line".into();
         }
     }
 
     pub fn cut_line(&mut self) {
+        self.ensure_split();
         if self.cursor_y < self.buffer.len() {
             self.clipboard = self.buffer.remove(self.cursor_y) + "\n";
             if self.buffer.is_empty() {
@@ -359,6 +419,7 @@ impl App {
     }
 
     pub fn paste_clipboard(&mut self) {
+        self.ensure_split();
         let data = self.clipboard.clone();
         if data.is_empty() || self.cursor_y >= self.buffer.len() {
             return;

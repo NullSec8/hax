@@ -60,7 +60,7 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     let editor_area = if app.show_sidebar { chunks[1] } else { chunks[0] };
 
     // store editor area for mouse targeting and scroll calc – must happen before theme borrow
-    let line_num_w = app.buffer.len().to_string().len().max(3) as u16;
+    let line_num_w = app.line_count().to_string().len().max(3) as u16;
     app.editor_x = editor_area.x + line_num_w + 1;
     app.editor_y = editor_area.y;
     app.line_num_w = line_num_w;
@@ -143,11 +143,11 @@ fn draw_editor(frame: &mut Frame, area: Rect, app: &App, theme: &crate::theme::E
     frame.render_widget(block, area);
 
     let max_lines = inner.height as usize;
-    let line_num_width = app.buffer.len().to_string().len().max(3);
+    let line_num_width = app.line_count().to_string().len().max(3);
 
     for i in 0..max_lines {
         let buf_idx = app.offset_y + i;
-        if buf_idx >= app.buffer.len() {
+        if buf_idx >= app.line_count() {
             break;
         }
 
@@ -170,7 +170,7 @@ fn draw_editor(frame: &mut Frame, area: Rect, app: &App, theme: &crate::theme::E
             Rect::new(inner.x, y, line_num_width as u16 + 1, 1),
         );
 
-        let line = &app.buffer[buf_idx];
+        let line = app.get_line(buf_idx);
         let visible_start_byte: usize = line.chars().take(app.offset_x).map(|c| c.len_utf8()).sum();
         let visible = if visible_start_byte < line.len() {
             &line[visible_start_byte..]
@@ -200,7 +200,7 @@ fn draw_editor(frame: &mut Frame, area: Rect, app: &App, theme: &crate::theme::E
     }
 
     if matches!(app.mode, Mode::Normal) {
-        let vis_x = app.buffer[app.cursor_y]
+        let vis_x = app.get_line(app.cursor_y)
             .chars().skip(app.offset_x)
             .take(app.cursor_x.saturating_sub(app.offset_x))
             .map(char_width)
@@ -234,7 +234,7 @@ fn draw_status_bar(frame: &mut Frame, area: Rect, app: &App, theme: &crate::them
 
     let modified = if app.modified { " +" } else { "" };
     let cursor = format!("{}:{}", app.cursor_y + 1, app.cursor_x + 1);
-    let total = app.buffer.len();
+    let total = app.line_count();
     let lang = app.filename.as_ref()
         .and_then(|p| p.extension())
         .map(|e| e.to_string_lossy().to_string())
