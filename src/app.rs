@@ -45,7 +45,6 @@ pub struct App {
     pub keybindings: crate::config::KeyBindings,
     pub status_message: String,
     pub quit: bool,
-    // editor area for mouse targeting
     pub editor_x: u16,
     pub editor_y: u16,
     pub line_num_w: u16,

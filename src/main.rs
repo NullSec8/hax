@@ -13,7 +13,6 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use std::io;
 
 fn main() -> io::Result<()> {
-    // disable flow control so Ctrl+S / Ctrl+Q aren't intercepted
     let _ = std::process::Command::new("stty").args(["-ixon"]).status();
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -23,7 +22,6 @@ fn main() -> io::Result<()> {
 
     let mut app = App::new();
 
-    // open file from CLI arg: hax <filename>
     if let Some(path) = std::env::args().nth(1) {
         app.open_file(std::path::PathBuf::from(&path));
     }
@@ -47,7 +45,6 @@ fn main() -> io::Result<()> {
 }
 
 fn handle_events(app: &mut App) -> io::Result<bool> {
-    // process all queued events each frame for instant response
     let mut any = false;
     loop {
         if !event::poll(std::time::Duration::from_micros(500))? {

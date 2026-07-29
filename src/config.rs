@@ -53,7 +53,6 @@ impl KeyBindings {
         }
         let content = std::fs::read_to_string(&path).unwrap_or_default();
         let mut lines: Vec<String> = content.lines().map(|l| l.to_string()).collect();
-        // find or replace theme= line
         let mut found = false;
         for line in &mut lines {
             if let Some((key, _)) = line.split_once('=') {
@@ -188,7 +187,7 @@ pub fn exec_normal(app: &mut crate::app::App, action: &str) {
         "insert_tab" => app.insert_tab(),
         "delete_forward" => app.delete_forward(),
         "delete_backward" => app.delete_char(),
-        "escape" => {}  // no-op in normal mode
+        "escape" => {}
         _ => {}
     }
 }

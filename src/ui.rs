@@ -59,7 +59,6 @@ pub fn draw(frame: &mut Frame, app: &mut App) {
     let chunks = main_layout.split(area);
     let editor_area = if app.show_sidebar { chunks[1] } else { chunks[0] };
 
-    // store editor area for mouse targeting and scroll calc – must happen before theme borrow
     let line_num_w = app.line_count().to_string().len().max(3) as u16;
     app.editor_x = editor_area.x + line_num_w + 1;
     app.editor_y = editor_area.y;
@@ -371,7 +370,6 @@ fn draw_confirm_quit_overlay(frame: &mut Frame, area: Rect, theme: &crate::theme
         .alignment(Alignment::Center);
     frame.render_widget(text, inner);
 
-    // position cursor in top-left of overlay
     frame.set_cursor_position((inner.x + 1, inner.y + 1));
 }
 
