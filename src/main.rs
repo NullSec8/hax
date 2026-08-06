@@ -209,6 +209,11 @@ fn handle_normal_mode(app: &mut App, code: KeyCode, mods: KeyModifiers) {
                         app.cursor_byte += c.len_utf8();
                     }
                 }
+                let cc2 = app.get_line(app.cursor_y).chars().count();
+                if app.cursor_x > cc2 {
+                    app.cursor_x = cc2;
+                    app.recalc_cursor_byte();
+                }
             }
         }
         (KeyCode::Up, _) if app.cursor_y > 0 => {

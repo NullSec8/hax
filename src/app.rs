@@ -125,6 +125,9 @@ impl App {
     }
 
     pub fn get_line(&self, n: usize) -> &str {
+        if n >= self.line_count() {
+            return "";
+        }
         if let Some(ref c) = self.file_content {
             let start = self.line_starts[n];
             let end = if n + 1 < self.line_starts.len() {
@@ -214,10 +217,10 @@ impl App {
     pub fn flush_file(&mut self) {
         let path = self.filename.as_ref().unwrap().clone();
         let result = if let Some(ref c) = self.file_content {
-            if c.ends_with('\n') { fs::write(&path, c) } else { fs::write(&path, format!("{c}\n")) }
+            fs::write(&path, c)
         } else {
             let joined = self.buffer.join("\n");
-            if joined.is_empty() { fs::write(&path, "") } else { fs::write(&path, joined + "\n") }
+            fs::write(&path, joined)
         };
         match result {
             Ok(_) => {
@@ -438,8 +441,11 @@ impl App {
                 self.buffer.insert(self.cursor_y + i, pasted[i].to_string());
             }
             self.buffer.insert(self.cursor_y + n - 1, last);
-            self.cursor_y = self.cursor_y + n - 1;
-            self.cursor_x = pasted[n - 1].chars().count();
+            self.cursor_y += n - 1;
+            if self.cursor_y >= self.buffer.len() {
+                self.cursor_y = self.buffer.len() - 1;
+            }
+            self.cursor_x = self.buffer[self.cursor_y].chars().count();
         } else {
             self.buffer[self.cursor_y].push_str(&right);
             self.cursor_x += pasted[0].chars().count();

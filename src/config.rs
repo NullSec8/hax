@@ -151,6 +151,11 @@ pub fn exec_normal(app: &mut crate::app::App, action: &str) {
                         app.cursor_byte += c.len_utf8();
                     }
                 }
+                let cc2 = app.get_line(app.cursor_y).chars().count();
+                if app.cursor_x > cc2 {
+                    app.cursor_x = cc2;
+                    app.recalc_cursor_byte();
+                }
             }
         }
         "cursor_up" => {
